@@ -25,6 +25,7 @@ import httplib
 import logging
 import math
 import os
+import socket
 import threading
 import time
 import urllib
@@ -55,7 +56,8 @@ except ImportError:
 _RETRIABLE_EXCEPTIONS = (urlfetch.DownloadError,
                          apiproxy_errors.Error,
                          app_identity.InternalError,
-                         app_identity.BackendDeadlineExceeded)
+                         app_identity.BackendDeadlineExceeded,
+                         socket.timeout)
 
 _thread_local_settings = threading.local()
 _thread_local_settings.default_retry_params = None

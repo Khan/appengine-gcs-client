@@ -25,6 +25,7 @@ __all__ = ['ReadBuffer',
 import collections
 import os
 import urlparse
+import socket
 
 from . import api_utils
 from . import common
@@ -129,6 +130,9 @@ class _StorageApi(rest_api._RestApi):
     except urlfetch.DownloadError, e:
       raise errors.TimeoutError(
           'Request to Google Cloud Storage timed out.', e)
+    except socket.timeout, e:
+      raise errors.TimeoutError(
+          'Socket to Google Cloud Storage timed out.', e)
 
     raise ndb.Return(resp_tuple)
 
