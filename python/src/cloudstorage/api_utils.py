@@ -25,6 +25,7 @@ import httplib
 import logging
 import math
 import os
+import requests
 import socket
 import threading
 import time
@@ -57,7 +58,10 @@ _RETRIABLE_EXCEPTIONS = (urlfetch.DownloadError,
                          apiproxy_errors.Error,
                          app_identity.InternalError,
                          app_identity.BackendDeadlineExceeded,
-                         socket.timeout)
+                         socket.timeout,
+                         requests.ConnectionError,
+                         requests.exceptions.ConnectionError,
+                        )
 
 _thread_local_settings = threading.local()
 _thread_local_settings.default_retry_params = None
@@ -171,6 +175,17 @@ class _RetryWrapper(object):
         raise
       except self.retriable_exceptions, e:
         pass
+      except Exception, e:
+        # Managed VMs use some non-standard HTTP libraries, which may throw
+        # strangely formatted exceptions. The below hackery is an attempt to
+        # allow network resiliency retry operations.
+
+        # type-check required because sometimes str(e) throws
+        # TypeError: argument of type '_URLFetchResult' is not iterable
+        if isinstance(str(e), basestring) and 'timeout' in str(e):
+          pass
+        else:
+          raise
 
       if n == 1:
         logging.debug('Tasklet is %r', tasklet)

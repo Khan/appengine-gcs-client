@@ -23,8 +23,10 @@ __all__ = ['ReadBuffer',
           ]
 
 import collections
+import logging
 import os
 import urlparse
+import requests
 import socket
 
 from . import api_utils
@@ -133,6 +135,14 @@ class _StorageApi(rest_api._RestApi):
     except socket.timeout, e:
       raise errors.TimeoutError(
           'Socket to Google Cloud Storage timed out.', e)
+    except (requests.exceptions.ConnectionError,
+            requests.ConnectionError) as e:
+        raise errors.TimeoutError(
+          'requests ConnectionError to Google Cloud Storage:', e)
+    except Exception, e:
+        logging.exception("Uncaught exception preventing network resiliency "
+                          "retry operations: %s, %s", type(e), e)
+        raise
 
     raise ndb.Return(resp_tuple)
 
