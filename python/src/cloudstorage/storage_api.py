@@ -747,6 +747,44 @@ class StreamingBuffer(object):
     self._check_open()
     self._flush(finish=False)
 
+  def seek(self, offset, from_what):
+    """No-ops or raises a NotImplemented exception.
+
+    This method was added to interface with parts of the boto library. boto
+    supports resumable downloads from S3 and GCS, but in order to do so it
+    needs to know the # of bytes written so far. This is implemented by seeking
+    to the end of the file object and calling tell(), which works on standard
+    Python file objects. It fails on GCS file objects because they are not
+    seekable.
+
+    However, because StreamingBuffer is a write-only file, we are guaranteed to
+    be at the end of the file. So, to interface with boto, all seeks to the end
+    no-op, and all other seeks fail.
+
+    Args:
+      offset: the offset from the location specified in from_what.
+      from_what: relative location to start seeking from. This should always
+        be given os.SEEK_END, os.SEEK_SET, or os.SEEK_CUR. SEEK_END starts
+        from the end, SEEK_SET starts from the beginning, and SEEK_CUR starts
+        from the current position.
+
+    Raises:
+      NotImplementedError: if the seek does not go to the end of the file.
+    """
+    if from_what == os.SEEK_END and offset == 0:
+        pass
+    elif from_what == os.SEEK_SET and offset == self.tell():
+        pass
+    elif from_what == os.SEEK_CUR and offset == 0:
+        # Since StreamingBuffer is write-only, the current position should
+        # always be the last byte of the file. This code path will probably
+        # never run - asking Python to move 0 bytes from the current file
+        # position is a rare use case.
+        pass
+    else:
+        raise NotImplementedError('StreamingBuffer only supports seeking to '
+                                  'the end of the file')
+
   def tell(self):
     """Return the total number of bytes passed to write() so far.
 
@@ -892,6 +930,8 @@ class StreamingBuffer(object):
       raise IOError('Buffer is closed.')
 
   def seekable(self):
+    # Although StreamingBuffer implements a seek method, it is not meant to be
+    # seekable, so this should still be False
     return False
 
   def readable(self):

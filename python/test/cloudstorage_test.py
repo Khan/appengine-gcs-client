@@ -87,6 +87,16 @@ class IrregularPatternTest(unittest.TestCase):
     self.assertEqual(256+50, a/1024.0)
     self.assertEqual(50, b/1024.0)
 
+  def testStreamingBufferSeekNoOp(self):
+    """Test seek behavior on StreamingBuffer objects."""
+    f = cloudstorage.open(TESTFILE, 'w')
+    f.write('a'*(256+50)*1024)
+    f.seek(0, os.SEEK_END)
+    f.seek(0, os.SEEK_CUR)
+    f.seek((256+50)*1024, os.SEEK_SET)
+    self.assertRaises(NotImplementedError, f.seek, 1000, os.SEEK_SET)
+    self.assertRaises(NotImplementedError, f.seek, -5, os.SEEK_END)
+
   def testReuploadSameContent(self):
     """Test re write same content to same offset works."""
     f = cloudstorage.open(TESTFILE, 'w')
