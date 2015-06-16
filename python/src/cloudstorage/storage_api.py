@@ -792,6 +792,28 @@ class StreamingBuffer(object):
     """
     return self._offset
 
+  def truncate(self, size):
+    """No-ops or raises a NotImplemented exception.
+
+    Similarly to seek(), boto's resumable downloader calls truncate() on the
+    file object. It says it does so in case a resumable download is starting
+    on an existing file, but since the file object getting passed is almost
+    always in 'w' mode it seems kind of pointless...
+
+    In any case, StreamingBuffer doesn't support truncate either, so to
+    interface, no-op truncates that do nothing and fail on the rest.
+
+    Args:
+      size: the size to truncate to.
+
+    Raises:
+      NotImplementedError: if the truncate is not truncated to the current
+        file size.
+    """
+    if size != self.tell():
+        raise NotImplementedError('StreamingBuffer only supports truncation to'
+                                  ' the current file size')
+
   def close(self):
     """Flush the buffer and finalize the file.
 
