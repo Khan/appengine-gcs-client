@@ -188,6 +188,10 @@ class _RestApi(object):
         follow_redirects=False)
     raise ndb.Return((resp.status_code, resp.headers, resp.content))
 
+  # Even if this is called from inside a transaction, we don't need
+  # this put() to be in the transaction: caching a token is safe and
+  # correct even if the outer transaction ends up being rolled back.
+  @ndb.non_transactional
   @ndb.tasklet
   def get_token_async(self, refresh=False):
     """Get an authentication token.
