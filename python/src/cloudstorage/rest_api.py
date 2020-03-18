@@ -84,6 +84,12 @@ class _AE_TokenStorage_(ndb.Model):
   expires = ndb.FloatProperty()
 
 
+# In-memory cache of tokens, which persists beyond the request.  This
+# supplements ndb auto-caching, to avoid overloading memcache.
+# TODO(benkraft): This is very tacked-on; do something cleaner.
+_TOKEN_CACHE = {}
+
+
 @ndb.tasklet
 def _make_token_async(scopes, service_account_id):
   """Get a fresh authentication token.
@@ -188,6 +194,10 @@ class _RestApi(object):
         follow_redirects=False)
     raise ndb.Return((resp.status_code, resp.headers, resp.content))
 
+  def _token_is_invalid(self, token_storage):
+    return (token_storage is None or
+            token_storage.expires < time.time() + self.expiration_headroom)
+
   # Even if this is called from inside a transaction, we don't need
   # this put() to be in the transaction: caching a token is safe and
   # correct even if the outer transaction ends up being rolled back.
@@ -207,11 +217,21 @@ class _RestApi(object):
       An authentication token. This token is guaranteed to be non-expired.
     """
     key = '%s,%s' % (self.service_account_id, ','.join(self.scopes))
-    ts = yield _AE_TokenStorage_.get_by_id_async(
-        key, use_cache=True, use_memcache=True,
-        use_datastore=self.retry_params.save_access_token)
-    if refresh or ts is None or ts.expires < (
-        time.time() + self.expiration_headroom):
+    ts = None
+    if not refresh:
+      # First, try the local cache.
+      ts = _TOKEN_CACHE.get(key)
+      if self._token_is_invalid(ts):
+        # If we got this token from local cache, but it's invalid, drop it to
+        # save memory.
+        _TOKEN_CACHE.pop(key, None)
+        # If the token is missing or invalid, try the ndb cache.
+        ts = yield _AE_TokenStorage_.get_by_id_async(
+            key, use_cache=True, use_memcache=True,
+            use_datastore=self.retry_params.save_access_token)
+    # If we still don't have a valid token (or were forced to refresh),
+    # request a new one.
+    if self._token_is_invalid(ts):
       token, expires_at = yield self.make_token_async(
           self.scopes, self.service_account_id)
       timeout = int(expires_at - time.time())
@@ -220,6 +240,8 @@ class _RestApi(object):
         yield ts.put_async(memcache_timeout=timeout,
                            use_datastore=self.retry_params.save_access_token,
                            use_cache=True, use_memcache=True)
+    # Whatever token we ended up with, make sure to put it in the cache.
+    _TOKEN_CACHE[key] = ts
     raise ndb.Return(ts.token)
 
   @ndb.tasklet

@@ -173,6 +173,19 @@ class RestApiTest(unittest.TestCase):
     t2 = api.get_token()
     self.assertEqual(t2, t1)
 
+  def testTokenCachedAcrossContexts(self):
+    api = rest_api._RestApi('scope')
+    t1 = api.get_token()
+    self.assertNotEqual(None, t1)
+
+    # Clear ndb caches to prove we didn't get it from there
+    ndb.get_context().clear_cache()
+    memcache.flush_all()
+
+    api = rest_api._RestApi('scope')
+    t2 = api.get_token()
+    self.assertEqual(t2, t1)
+
   def testTokenSaved(self):
     retry_params = api_utils.RetryParams(save_access_token=True)
     api = rest_api._RestApi('scope', retry_params=retry_params)
@@ -185,6 +198,7 @@ class RestApiTest(unittest.TestCase):
 
     memcache.flush_all()
     ndb.get_context().clear_cache()
+    rest_api._TOKEN_CACHE.clear()
 
     api = rest_api._RestApi('scope', retry_params=retry_params)
     t3 = api.get_token()
